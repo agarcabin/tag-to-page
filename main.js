@@ -48,12 +48,35 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerDomEvent(document, "click", this.onTagClick.bind(this), true);
+    this.registerDomEvent(document, "touchend", this.onTagTouchEnd.bind(this), { capture: true, passive: false });
     if (this.settings.autocompleteOn) {
       this.registerAutocompleteOverride();
     }
     this.addSettingTab(new TagToPageSettingTab(this.app, this));
   }
   // ── click handler (Reading View + Live Preview) ──
+  onTagTouchEnd(evt) {
+    var _a;
+    const touch = evt.changedTouches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!target)
+      return;
+    const tagEl = target.closest(".tag, .cm-hashtag");
+    if (!tagEl)
+      return;
+    const contentArea = tagEl.closest(
+      ".markdown-preview-view, .cm-editor, .markdown-source-view"
+    );
+    if (!contentArea)
+      return;
+    evt.stopPropagation();
+    evt.preventDefault();
+    let tagName = ((_a = tagEl.textContent) != null ? _a : "").trim();
+    tagName = tagName.replace(/^#/, "").trim();
+    if (!tagName)
+      return;
+    this.navigateToTagPage(tagName, false);
+  }
   onTagClick(evt) {
     var _a;
     if (evt.button !== 0)

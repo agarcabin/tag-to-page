@@ -52,6 +52,8 @@ export default class TagToPagePlugin extends Plugin {
 		await this.loadSettings();
 
 		this.registerDomEvent(document, "click", this.onTagClick.bind(this), true);
+		// Mobile: intercept touchend before Obsidian handles it
+		this.registerDomEvent(document, "touchend", this.onTagTouchEnd.bind(this), { capture: true, passive: false } as any);
 
 		if (this.settings.autocompleteOn) {
 			this.registerAutocompleteOverride();
@@ -61,6 +63,30 @@ export default class TagToPagePlugin extends Plugin {
 	}
 
 	// ── click handler (Reading View + Live Preview) ──
+
+	private onTagTouchEnd(evt: TouchEvent) {
+		// Find the element under the finger
+		const touch = evt.changedTouches[0];
+		const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+		if (!target) return;
+
+		const tagEl = target.closest<HTMLElement>(".tag, .cm-hashtag");
+		if (!tagEl) return;
+
+		const contentArea = tagEl.closest(
+			".markdown-preview-view, .cm-editor, .markdown-source-view",
+		);
+		if (!contentArea) return;
+
+		evt.stopPropagation();
+		evt.preventDefault();
+
+		let tagName = (tagEl.textContent ?? "").trim();
+		tagName = tagName.replace(/^#/, "").trim();
+		if (!tagName) return;
+
+		this.navigateToTagPage(tagName, false);
+	}
 
 	private onTagClick(evt: MouseEvent) {
 		if (evt.button !== 0) return;
