@@ -6,6 +6,8 @@
 
 Obsdian Tag to Page is an Obsidian plugin that makes `#tags` behave more like Logseq: click a tag to open its `[[tag]]` note instead of opening the tag search pane.
 
+> Current release: `1.2.0`
+
 ### Features
 
 - **Open a note from `#tag`** — Click tags in Reading view and Live Preview to open the note with the matching name.
@@ -15,6 +17,7 @@ Obsdian Tag to Page is an Obsidian plugin that makes `#tags` behave more like Lo
 - **Open in a new pane** — Hold `Ctrl` on Windows/Linux or `Cmd` on macOS while clicking.
 - **Optional page completion** — Type `#` to search note names and aliases for completion suggestions.
 - **Bilingual settings** — Switch the plugin interface between Chinese and English.
+- **Responsive settings UI** — Clear sections, contextual guidance, and a compact layout for narrow windows and mobile screens.
 
 ### Installation
 
@@ -75,6 +78,8 @@ npm run build  # production build
 
 Obsdian Tag to Page 是一个 Obsidian 插件，让 `#标签` 的行为更像 Logseq：点击标签后直接打开对应的 `[[标签]]` 页面，而不是打开标签搜索面板。
 
+> 当前版本：`1.2.0`
+
 ### 功能
 
 - **点击 `#tag` 打开页面** — 在阅读视图和实时预览中点击标签，直接打开同名笔记。
@@ -84,6 +89,7 @@ Obsdian Tag to Page 是一个 Obsidian 插件，让 `#标签` 的行为更像 Lo
 - **在新窗格打开** — Windows/Linux 按住 `Ctrl`，macOS 按住 `Cmd` 后点击。
 - **可选页面补全** — 输入 `#` 时，可从笔记名和别名中搜索补全建议。
 - **双语设置界面** — 可在中文和 English 之间切换插件界面。
+- **响应式设置界面** — 通过清晰分组、上下文提示和窄屏布局，提升桌面与移动端的使用体验。
 
 ### 安装
 

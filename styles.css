@@ -1,4 +1,164 @@
-/*
- * Tag to Page ¡ª no custom styles needed for v1.
- * All behavior is handled via click interception in main.ts.
- */
+/* Tag to Page settings */
+
+.tag-to-page-settings {
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 8px 0 32px;
+}
+
+.tag-to-page-settings__hero {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 16px;
+	align-items: start;
+	padding: 20px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: linear-gradient(
+		135deg,
+		var(--background-secondary),
+		var(--background-primary-alt)
+	);
+}
+
+.tag-to-page-settings__icon {
+	display: grid;
+	width: 48px;
+	height: 48px;
+	place-items: center;
+	border-radius: 15px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 24px;
+	font-weight: 700;
+	line-height: 1;
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+}
+
+.tag-to-page-settings__hero h2 {
+	margin: 0;
+	font-size: var(--font-ui-larger);
+}
+
+.tag-to-page-settings__hero p {
+	max-width: 62ch;
+	margin: 8px 0 0;
+	color: var(--text-muted);
+	line-height: 1.55;
+}
+
+.tag-to-page-settings__hero-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 14px;
+	align-items: center;
+	margin-top: 14px;
+	font-size: var(--font-smallest);
+}
+
+.tag-to-page-settings__version {
+	padding: 3px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-muted);
+}
+
+.tag-to-page-settings__section {
+	margin-top: 20px;
+	padding: 18px 20px 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: var(--background-secondary);
+}
+
+.tag-to-page-settings__section-header {
+	padding-bottom: 6px;
+}
+
+.tag-to-page-settings__section-header h3 {
+	margin: 0;
+	font-size: var(--font-ui-medium);
+}
+
+.tag-to-page-settings__section-header p {
+	margin: 5px 0 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.45;
+}
+
+.tag-to-page-settings__setting {
+	margin: 0;
+	padding: 16px 0;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.tag-to-page-settings__setting .setting-item-info {
+	min-width: 0;
+}
+
+.tag-to-page-settings__setting .setting-item-name {
+	font-weight: 600;
+}
+
+.tag-to-page-settings__setting .setting-item-description {
+	line-height: 1.5;
+}
+
+.tag-to-page-settings__notice {
+	display: grid;
+	gap: 4px;
+	margin: 4px 0 16px;
+	padding: 12px 14px;
+	border-left: 3px solid var(--interactive-accent);
+	border-radius: var(--radius-s);
+	background: var(--background-primary-alt);
+}
+
+.tag-to-page-settings__notice-title {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+}
+
+.tag-to-page-settings__notice-text {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+	.tag-to-page-settings {
+		padding: 4px 0 24px;
+	}
+
+	.tag-to-page-settings__hero {
+		gap: 12px;
+		padding: 16px;
+	}
+
+	.tag-to-page-settings__section {
+		margin-top: 14px;
+		padding: 16px 16px 2px;
+	}
+
+	.tag-to-page-settings__setting {
+		flex-direction: column;
+		gap: 12px;
+		align-items: stretch;
+		padding: 15px 0;
+	}
+
+	.tag-to-page-settings__setting .setting-item-info {
+		width: 100%;
+	}
+
+	.tag-to-page-settings__setting .setting-item-control {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.tag-to-page-settings__setting .dropdown {
+		width: 100%;
+		min-height: 44px;
+	}
+}

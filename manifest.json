@@ -1,10 +1,10 @@
-﻿{
-    "id":  "tag-to-page",
-    "name":  "Tag to Page",
-    "version":  "1.1.0",
-    "minAppVersion":  "1.0.0",
-    "description":  "Click #tag to navigate to [[tag]] page like Logseq",
-    "author":  "A Qiong 阿琼",
-    "authorUrl":  "",
-    "isDesktopOnly":  false
+{
+    "id": "tag-to-page",
+    "name": "Tag to Page",
+    "version": "1.2.0",
+    "minAppVersion": "1.0.0",
+    "description": "Click #tag to navigate to [[tag]] page like Logseq",
+    "author": "A Qiong 阿琼",
+    "authorUrl": "",
+    "isDesktopOnly": false
 }

@@ -15,19 +15,37 @@ const LANG: Record<Lang, Record<string, string>> = {
 		settingHeader: "Tag to Page",
 		pluginDesc:
 			"点击 #标签 时直接跳转到 [[页面]]，而不是打开标签搜索面板。结合反链面板使用，还原 Logseq 的标签浏览体验。",
-		language: "语言",
-		autocompleteName: "输入#时显示[[页面]]补全建议",
+		preferences: "偏好设置",
+		preferencesDesc: "选择设置界面语言，并按需调整标签页面行为。",
+		language: "界面语言",
+		languageDesc: "选择插件设置界面使用的语言。",
+		behavior: "标签行为",
+		behaviorDesc: "控制点击标签和输入 # 时的页面跳转体验。",
+		autocompleteName: "输入 # 时显示页面补全",
 		autocompleteDesc:
-			"开启后，输入#会自动提示匹配的笔记文件名和别名。注意:开启后使用#时会有一定的性能消耗，如果遇到问题请关闭开关并重载插件恢复",
+			"开启后，输入 # 会提示匹配的笔记文件名和别名。切换开关后插件会自动重载以应用设置。",
+		autocompleteNotice: "使用提示",
+		autocompleteNoticeDesc:
+			"页面补全会替换 Obsidian 默认的 [[ 页面选择器，并可能增加扫描开销；遇到异常时可关闭此选项。",
+		repository: "GitHub 项目主页",
 	},
 	en: {
 		settingHeader: "Tag to Page",
 		pluginDesc:
 			"Click #tag to navigate directly to [[page]] instead of opening the tag search panel. Use with the Backlinks pane for a Logseq-like tag browsing experience.",
-		language: "Language",
+		preferences: "Preferences",
+		preferencesDesc: "Choose the settings language and adjust tag-page behavior.",
+		language: "Interface language",
+		languageDesc: "Choose the language used by this settings page.",
+		behavior: "Tag behavior",
+		behaviorDesc: "Control tag clicks and page suggestions while typing #.",
 		autocompleteName: "Page-name suggestions with #",
 		autocompleteDesc:
-			"When on, typing # followed by text suggests matching file names and frontmatter aliases from your vault. Note: the [[ link picker may not work while active. Toggle off and reload to restore defaults.",
+			"When on, typing # suggests matching file names and frontmatter aliases. The plugin reloads automatically after this setting changes.",
+		autocompleteNotice: "Please note",
+		autocompleteNoticeDesc:
+			"Page completion replaces Obsidian's default [[ link picker and may add scanning overhead. Turn it off if you notice unexpected behavior.",
+		repository: "GitHub repository",
 	},
 };
 
@@ -36,6 +54,11 @@ const LANG: Record<Lang, Record<string, string>> = {
 interface TagToPageSettings {
 	autocompleteOn: boolean;
 	language: Lang;
+}
+
+interface PluginManager {
+	disablePlugin(id: string): Promise<void>;
+	enablePlugin(id: string): Promise<void>;
 }
 
 const DEFAULT_SETTINGS: TagToPageSettings = {
@@ -274,17 +297,42 @@ class TagToPageSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		containerEl.addClass("tag-to-page-settings");
 
-		containerEl.createEl("h2", { text: this.t("settingHeader") });
-
-		containerEl.createEl("p", {
-			text: this.t("pluginDesc"),
-			cls: "setting-item-description",
+		const hero = containerEl.createDiv({ cls: "tag-to-page-settings__hero" });
+		const icon = hero.createDiv({
+			cls: "tag-to-page-settings__icon",
+			text: "#",
 		});
+		icon.setAttr("aria-hidden", "true");
 
-		// Language selector
-		new Setting(containerEl)
+		const heroBody = hero.createDiv({ cls: "tag-to-page-settings__hero-body" });
+		heroBody.createEl("h2", { text: this.t("settingHeader") });
+		heroBody.createEl("p", { text: this.t("pluginDesc") });
+		const heroMeta = heroBody.createDiv({ cls: "tag-to-page-settings__hero-meta" });
+		heroMeta.createSpan({
+			cls: "tag-to-page-settings__version",
+			text: `v${this.plugin.manifest.version}`,
+		});
+		const repositoryLink = heroMeta.createEl("a", {
+			text: this.t("repository"),
+			href: "https://github.com/agarcabin/obsdian-tag-to-page",
+		});
+		repositoryLink.setAttr("target", "_blank");
+		repositoryLink.setAttr("rel", "noopener");
+
+		const preferencesSection = containerEl.createDiv({
+			cls: "tag-to-page-settings__section",
+		});
+		const preferencesHeader = preferencesSection.createDiv({
+			cls: "tag-to-page-settings__section-header",
+		});
+		preferencesHeader.createEl("h3", { text: this.t("preferences") });
+		preferencesHeader.createEl("p", { text: this.t("preferencesDesc") });
+
+		const languageSetting = new Setting(preferencesSection)
 			.setName(this.t("language"))
+			.setDesc(this.t("languageDesc"))
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("zh", "中文")
@@ -296,9 +344,18 @@ class TagToPageSettingTab extends PluginSettingTab {
 						this.display();
 					}),
 			);
+		languageSetting.settingEl.addClass("tag-to-page-settings__setting");
 
-		// Autocomplete toggle
-		new Setting(containerEl)
+		const behaviorSection = containerEl.createDiv({
+			cls: "tag-to-page-settings__section",
+		});
+		const behaviorHeader = behaviorSection.createDiv({
+			cls: "tag-to-page-settings__section-header",
+		});
+		behaviorHeader.createEl("h3", { text: this.t("behavior") });
+		behaviorHeader.createEl("p", { text: this.t("behaviorDesc") });
+
+		const autocompleteSetting = new Setting(behaviorSection)
 			.setName(this.t("autocompleteName"))
 			.setDesc(this.t("autocompleteDesc"))
 			.addToggle((toggle) =>
@@ -307,10 +364,26 @@ class TagToPageSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.autocompleteOn = value;
 						await this.plugin.saveSettings();
-						const id = "tag-to-page";
-						await this.plugin.app.plugins.disablePlugin(id);
-						await this.plugin.app.plugins.enablePlugin(id);
+						const id = this.plugin.manifest.id;
+						const pluginManager = (this.plugin.app as App & {
+							plugins: PluginManager;
+						}).plugins;
+						await pluginManager.disablePlugin(id);
+						await pluginManager.enablePlugin(id);
 					}),
 			);
+		autocompleteSetting.settingEl.addClass("tag-to-page-settings__setting");
+
+		const notice = behaviorSection.createDiv({
+			cls: "tag-to-page-settings__notice",
+		});
+		notice.createDiv({
+			cls: "tag-to-page-settings__notice-title",
+			text: this.t("autocompleteNotice"),
+		});
+		notice.createDiv({
+			cls: "tag-to-page-settings__notice-text",
+			text: this.t("autocompleteNoticeDesc"),
+		});
 	}
 }
