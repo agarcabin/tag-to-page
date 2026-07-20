@@ -1,5 +1,5 @@
 ﻿{
-    "name":  "tag-to-page",
+    "name":  "obsdian-tag-to-page",
     "version":  "1.1.0",
     "description":  "Click #tag to navigate to [[tag]] page like Logseq",
     "main":  "main.js",
