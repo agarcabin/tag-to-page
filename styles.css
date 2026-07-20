@@ -9,7 +9,7 @@
 .tag-to-page-settings__hero {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
-	gap: 16px;
+	gap: 0;
 	align-items: start;
 	padding: 20px;
 	border: 1px solid var(--background-modifier-border);
@@ -76,7 +76,9 @@
 }
 
 .tag-to-page-settings__section-header h3 {
-	margin: 0;
+	margin: 0 0 0 -20px;
+	padding-inline-start: 0;
+	text-indent: 0;
 	font-size: var(--font-ui-medium);
 }
 
@@ -132,7 +134,7 @@
 	}
 
 	.tag-to-page-settings__hero {
-		gap: 12px;
+		gap: 0;
 		padding: 16px;
 	}
 
@@ -146,6 +148,10 @@
 		gap: 12px;
 		align-items: stretch;
 		padding: 15px 0;
+	}
+
+	.tag-to-page-settings__section-header h3 {
+		margin-left: -16px;
 	}
 
 	.tag-to-page-settings__setting .setting-item-info {
