@@ -1,5 +1,5 @@
 ﻿import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
-import type { TFile } from "obsidian";
+import type { SettingDefinitionItem, TFile } from "obsidian";
 import {
 	autocompletion,
 	CompletionContext,
@@ -66,6 +66,30 @@ const DEFAULT_SETTINGS: TagToPageSettings = {
 	language: "zh",
 };
 
+const TAG_COMPLETION_PATTERN = new RegExp(
+	String.raw`#[-\p{L}\p{N}\p{Script=Han}_/]*$`,
+	"u",
+);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function stringValues(value: unknown): string[] {
+	if (typeof value === "string") return [value];
+	if (Array.isArray(value)) {
+		return value.filter((item): item is string => typeof item === "string");
+	}
+	return [];
+}
+
+function frontmatterAliases(frontmatter: unknown): string[] {
+	if (!isRecord(frontmatter)) return [];
+	return ["alias", "aliases"].flatMap((key) =>
+		stringValues(frontmatter[key]),
+	);
+}
+
 // ────────────────────────── Plugin class ──────────────────────────
 
 export default class TagToPagePlugin extends Plugin {
@@ -76,7 +100,10 @@ export default class TagToPagePlugin extends Plugin {
 
 		this.registerDomEvent(document, "click", this.onTagClick.bind(this), true);
 		// Mobile: intercept touchend before Obsidian handles it
-		this.registerDomEvent(document, "touchend", this.onTagTouchEnd.bind(this), { capture: true, passive: false } as any);
+		this.registerDomEvent(document, "touchend", this.onTagTouchEnd.bind(this), {
+			capture: true,
+			passive: false,
+		});
 
 		if (this.settings.autocompleteOn) {
 			this.registerAutocompleteOverride();
@@ -90,8 +117,9 @@ export default class TagToPagePlugin extends Plugin {
 	private onTagTouchEnd(evt: TouchEvent) {
 		// Find the element under the finger
 		const touch = evt.changedTouches[0];
-		const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-		if (!target) return;
+		if (!touch) return;
+		const target = document.elementFromPoint(touch.clientX, touch.clientY);
+		if (!(target instanceof HTMLElement)) return;
 
 		const tagEl = target.closest<HTMLElement>(".tag, .cm-hashtag");
 		if (!tagEl) return;
@@ -108,12 +136,13 @@ export default class TagToPagePlugin extends Plugin {
 		tagName = tagName.replace(/^#/, "").trim();
 		if (!tagName) return;
 
-		this.navigateToTagPage(tagName, false);
+		void this.navigateToTagPage(tagName, false);
 	}
 
 	private onTagClick(evt: MouseEvent) {
 		if (evt.button !== 0) return;
-		const target = evt.target as HTMLElement;
+		const target = evt.target;
+		if (!(target instanceof HTMLElement)) return;
 
 		const tagEl = target.closest<HTMLElement>(".tag, .cm-hashtag");
 		if (!tagEl) return;
@@ -130,7 +159,7 @@ export default class TagToPagePlugin extends Plugin {
 		tagName = tagName.replace(/^#/, "").trim();
 		if (!tagName) return;
 
-		this.navigateToTagPage(tagName, evt.ctrlKey || evt.metaKey);
+		void this.navigateToTagPage(tagName, evt.ctrlKey || evt.metaKey);
 	}
 
 	// ── navigation ──
@@ -159,16 +188,8 @@ export default class TagToPagePlugin extends Plugin {
 			const fm = cache?.frontmatter;
 			if (!fm) continue;
 
-			for (const key of ["alias", "aliases"] as const) {
-				const val = fm[key];
-				const list: string[] =
-					typeof val === "string"
-						? [val]
-						: Array.isArray(val)
-							? val.filter((v): v is string => typeof v === "string")
-							: [];
-				if (list.some((a) => a.toLowerCase() === target)) return file;
-			}
+			const aliases = frontmatterAliases(fm);
+			if (aliases.some((alias) => alias.toLowerCase() === target)) return file;
 		}
 		return null;
 	}
@@ -197,7 +218,7 @@ export default class TagToPagePlugin extends Plugin {
 	private getPageCompletion(
 		context: CompletionContext,
 	): CompletionResult | null {
-		const match = context.matchBefore(/#[-\p{L}\p{N}\p{Script=Han}_\/]*$/u);
+		const match = context.matchBefore(TAG_COMPLETION_PATTERN);
 		if (!match || (match.text === "#" && !context.explicit)) return null;
 
 		const query = match.text.slice(1).toLowerCase();
@@ -219,24 +240,15 @@ export default class TagToPagePlugin extends Plugin {
 			const fm = cache?.frontmatter;
 			if (!fm) continue;
 
-			for (const key of ["alias", "aliases"] as const) {
-				const val = fm[key];
-				const list: string[] =
-					typeof val === "string"
-						? [val]
-						: Array.isArray(val)
-							? val.filter((v): v is string => typeof v === "string")
-							: [];
-				for (const alias of list) {
-					if (seen.has(alias)) continue;
-					if (alias.toLowerCase().includes(query)) {
-						seen.add(alias);
-						suggestions.push({
-							label: alias,
-							apply: alias,
-							detail: `→ ${file.basename}`,
-						});
-					}
+			for (const alias of frontmatterAliases(fm)) {
+				if (seen.has(alias)) continue;
+				if (alias.toLowerCase().includes(query)) {
+					seen.add(alias);
+					suggestions.push({
+						label: alias,
+						apply: alias,
+						detail: `→ ${file.basename}`,
+					});
 				}
 			}
 		}
@@ -266,11 +278,12 @@ export default class TagToPagePlugin extends Plugin {
 	// ── settings persistence ──
 
 	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData(),
-		);
+		const loadedData: unknown = await this.loadData();
+		const stored = isRecord(loadedData) ? loadedData : {};
+		this.settings = {
+			autocompleteOn: stored.autocompleteOn === true,
+			language: stored.language === "en" ? "en" : DEFAULT_SETTINGS.language,
+		};
 	}
 
 	async saveSettings() {
@@ -294,6 +307,85 @@ class TagToPageSettingTab extends PluginSettingTab {
 		return LANG[lang]?.[key] ?? LANG["en"]?.[key] ?? key;
 	}
 
+	private refreshSettings(): void {
+		if (typeof this.update === "function") {
+			this.update();
+		} else {
+			this.display();
+		}
+	}
+
+	private async setLanguage(value: string): Promise<void> {
+		if (value !== "zh" && value !== "en") return;
+		this.plugin.settings.language = value;
+		await this.plugin.saveSettings();
+		this.refreshSettings();
+	}
+
+	private async setAutocompleteEnabled(value: boolean): Promise<void> {
+		this.plugin.settings.autocompleteOn = value;
+		await this.plugin.saveSettings();
+
+		const id = this.plugin.manifest.id;
+		const pluginManager = (this.plugin.app as App & {
+			plugins: PluginManager;
+		}).plugins;
+		await pluginManager.disablePlugin(id);
+		await pluginManager.enablePlugin(id);
+	}
+
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				type: "group",
+				heading: this.t("preferences"),
+				cls: "tag-to-page-settings__declarative-section",
+				items: [
+					{
+						name: this.t("language"),
+						desc: this.t("languageDesc"),
+						render: (setting) => {
+							setting.settingEl.addClass("tag-to-page-settings__setting");
+							setting.addDropdown((dropdown) =>
+								dropdown
+									.addOption("zh", "中文")
+									.addOption("en", "English")
+									.setValue(this.plugin.settings.language)
+									.onChange((value) => this.setLanguage(value)),
+							);
+						},
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: this.t("behavior"),
+				cls: "tag-to-page-settings__declarative-section",
+				items: [
+					{
+						name: this.t("autocompleteName"),
+						desc: this.t("autocompleteDesc"),
+						render: (setting) => {
+							setting.settingEl.addClass("tag-to-page-settings__setting");
+							setting.addToggle((toggle) =>
+								toggle
+									.setValue(this.plugin.settings.autocompleteOn)
+									.onChange((value) => this.setAutocompleteEnabled(value)),
+							);
+						},
+					},
+					{
+						name: this.t("autocompleteNotice"),
+						desc: this.t("autocompleteNoticeDesc"),
+						render: (setting) => {
+							setting.settingEl.addClass("tag-to-page-settings__notice");
+						},
+					},
+				],
+			},
+		];
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -307,8 +399,11 @@ class TagToPageSettingTab extends PluginSettingTab {
 		icon.setAttr("aria-hidden", "true");
 
 		const heroBody = hero.createDiv({ cls: "tag-to-page-settings__hero-body" });
-		heroBody.createEl("h2", { text: this.t("settingHeader") });
-		heroBody.createEl("p", { text: this.t("pluginDesc") });
+		const heroHeading = new Setting(heroBody)
+			.setName(this.t("settingHeader"))
+			.setDesc(this.t("pluginDesc"))
+			.setHeading();
+		heroHeading.settingEl.addClass("tag-to-page-settings__hero-heading");
 		const heroMeta = heroBody.createDiv({ cls: "tag-to-page-settings__hero-meta" });
 		heroMeta.createSpan({
 			cls: "tag-to-page-settings__version",
@@ -324,11 +419,11 @@ class TagToPageSettingTab extends PluginSettingTab {
 		const preferencesSection = containerEl.createDiv({
 			cls: "tag-to-page-settings__section",
 		});
-		const preferencesHeader = preferencesSection.createDiv({
-			cls: "tag-to-page-settings__section-header",
-		});
-		preferencesHeader.createEl("h3", { text: this.t("preferences") });
-		preferencesHeader.createEl("p", { text: this.t("preferencesDesc") });
+		const preferencesHeader = new Setting(preferencesSection)
+			.setName(this.t("preferences"))
+			.setDesc(this.t("preferencesDesc"))
+			.setHeading();
+		preferencesHeader.settingEl.addClass("tag-to-page-settings__section-header");
 
 		const languageSetting = new Setting(preferencesSection)
 			.setName(this.t("language"))
@@ -338,22 +433,18 @@ class TagToPageSettingTab extends PluginSettingTab {
 					.addOption("zh", "中文")
 					.addOption("en", "English")
 					.setValue(this.plugin.settings.language)
-					.onChange(async (value) => {
-						this.plugin.settings.language = value as "zh" | "en";
-						await this.plugin.saveSettings();
-						this.display();
-					}),
+					.onChange((value) => this.setLanguage(value)),
 			);
 		languageSetting.settingEl.addClass("tag-to-page-settings__setting");
 
 		const behaviorSection = containerEl.createDiv({
 			cls: "tag-to-page-settings__section",
 		});
-		const behaviorHeader = behaviorSection.createDiv({
-			cls: "tag-to-page-settings__section-header",
-		});
-		behaviorHeader.createEl("h3", { text: this.t("behavior") });
-		behaviorHeader.createEl("p", { text: this.t("behaviorDesc") });
+		const behaviorHeader = new Setting(behaviorSection)
+			.setName(this.t("behavior"))
+			.setDesc(this.t("behaviorDesc"))
+			.setHeading();
+		behaviorHeader.settingEl.addClass("tag-to-page-settings__section-header");
 
 		const autocompleteSetting = new Setting(behaviorSection)
 			.setName(this.t("autocompleteName"))
@@ -361,16 +452,7 @@ class TagToPageSettingTab extends PluginSettingTab {
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.autocompleteOn)
-					.onChange(async (value) => {
-						this.plugin.settings.autocompleteOn = value;
-						await this.plugin.saveSettings();
-						const id = this.plugin.manifest.id;
-						const pluginManager = (this.plugin.app as App & {
-							plugins: PluginManager;
-						}).plugins;
-						await pluginManager.disablePlugin(id);
-						await pluginManager.enablePlugin(id);
-					}),
+					.onChange((value) => this.setAutocompleteEnabled(value)),
 			);
 		autocompleteSetting.settingEl.addClass("tag-to-page-settings__setting");
 

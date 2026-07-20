@@ -64,11 +64,36 @@ var DEFAULT_SETTINGS = {
   autocompleteOn: false,
   language: "zh"
 };
+var TAG_COMPLETION_PATTERN = new RegExp(
+  String.raw`#[-\p{L}\p{N}\p{Script=Han}_/]*$`,
+  "u"
+);
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function stringValues(value) {
+  if (typeof value === "string")
+    return [value];
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string");
+  }
+  return [];
+}
+function frontmatterAliases(frontmatter) {
+  if (!isRecord(frontmatter))
+    return [];
+  return ["alias", "aliases"].flatMap(
+    (key) => stringValues(frontmatter[key])
+  );
+}
 var TagToPagePlugin = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerDomEvent(document, "click", this.onTagClick.bind(this), true);
-    this.registerDomEvent(document, "touchend", this.onTagTouchEnd.bind(this), { capture: true, passive: false });
+    this.registerDomEvent(document, "touchend", this.onTagTouchEnd.bind(this), {
+      capture: true,
+      passive: false
+    });
     if (this.settings.autocompleteOn) {
       this.registerAutocompleteOverride();
     }
@@ -78,8 +103,10 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
   onTagTouchEnd(evt) {
     var _a;
     const touch = evt.changedTouches[0];
+    if (!touch)
+      return;
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!target)
+    if (!(target instanceof HTMLElement))
       return;
     const tagEl = target.closest(".tag, .cm-hashtag");
     if (!tagEl)
@@ -95,13 +122,15 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
     tagName = tagName.replace(/^#/, "").trim();
     if (!tagName)
       return;
-    this.navigateToTagPage(tagName, false);
+    void this.navigateToTagPage(tagName, false);
   }
   onTagClick(evt) {
     var _a;
     if (evt.button !== 0)
       return;
     const target = evt.target;
+    if (!(target instanceof HTMLElement))
+      return;
     const tagEl = target.closest(".tag, .cm-hashtag");
     if (!tagEl)
       return;
@@ -116,7 +145,7 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
     tagName = tagName.replace(/^#/, "").trim();
     if (!tagName)
       return;
-    this.navigateToTagPage(tagName, evt.ctrlKey || evt.metaKey);
+    void this.navigateToTagPage(tagName, evt.ctrlKey || evt.metaKey);
   }
   // ── navigation ──
   async navigateToTagPage(tagName, openInNewLeaf) {
@@ -142,12 +171,9 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
       const fm = cache == null ? void 0 : cache.frontmatter;
       if (!fm)
         continue;
-      for (const key of ["alias", "aliases"]) {
-        const val = fm[key];
-        const list = typeof val === "string" ? [val] : Array.isArray(val) ? val.filter((v) => typeof v === "string") : [];
-        if (list.some((a) => a.toLowerCase() === target))
-          return file;
-      }
+      const aliases = frontmatterAliases(fm);
+      if (aliases.some((alias2) => alias2.toLowerCase() === target))
+        return file;
     }
     return null;
   }
@@ -171,7 +197,7 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
     );
   }
   getPageCompletion(context) {
-    const match = context.matchBefore(/#[-\p{L}\p{N}\p{Script=Han}_\/]*$/u);
+    const match = context.matchBefore(TAG_COMPLETION_PATTERN);
     if (!match || match.text === "#" && !context.explicit)
       return null;
     const query = match.text.slice(1).toLowerCase();
@@ -187,20 +213,16 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
       const fm = cache == null ? void 0 : cache.frontmatter;
       if (!fm)
         continue;
-      for (const key of ["alias", "aliases"]) {
-        const val = fm[key];
-        const list = typeof val === "string" ? [val] : Array.isArray(val) ? val.filter((v) => typeof v === "string") : [];
-        for (const alias of list) {
-          if (seen.has(alias))
-            continue;
-          if (alias.toLowerCase().includes(query)) {
-            seen.add(alias);
-            suggestions.push({
-              label: alias,
-              apply: alias,
-              detail: `\u2192 ${file.basename}`
-            });
-          }
+      for (const alias of frontmatterAliases(fm)) {
+        if (seen.has(alias))
+          continue;
+        if (alias.toLowerCase().includes(query)) {
+          seen.add(alias);
+          suggestions.push({
+            label: alias,
+            apply: alias,
+            detail: `\u2192 ${file.basename}`
+          });
         }
       }
     }
@@ -230,11 +252,12 @@ var TagToPagePlugin = class extends import_obsidian.Plugin {
   }
   // ── settings persistence ──
   async loadSettings() {
-    this.settings = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      await this.loadData()
-    );
+    const loadedData = await this.loadData();
+    const stored = isRecord(loadedData) ? loadedData : {};
+    this.settings = {
+      autocompleteOn: stored.autocompleteOn === true,
+      language: stored.language === "en" ? "en" : DEFAULT_SETTINGS.language
+    };
   }
   async saveSettings() {
     await this.saveData(this.settings);
@@ -251,6 +274,73 @@ var TagToPageSettingTab = class extends import_obsidian.PluginSettingTab {
     const lang = this.plugin.settings.language;
     return (_d = (_c = (_a = LANG[lang]) == null ? void 0 : _a[key]) != null ? _c : (_b = LANG["en"]) == null ? void 0 : _b[key]) != null ? _d : key;
   }
+  refreshSettings() {
+    if (typeof this.update === "function") {
+      this.update();
+    } else {
+      this.display();
+    }
+  }
+  async setLanguage(value) {
+    if (value !== "zh" && value !== "en")
+      return;
+    this.plugin.settings.language = value;
+    await this.plugin.saveSettings();
+    this.refreshSettings();
+  }
+  async setAutocompleteEnabled(value) {
+    this.plugin.settings.autocompleteOn = value;
+    await this.plugin.saveSettings();
+    const id = this.plugin.manifest.id;
+    const pluginManager = this.plugin.app.plugins;
+    await pluginManager.disablePlugin(id);
+    await pluginManager.enablePlugin(id);
+  }
+  getSettingDefinitions() {
+    return [
+      {
+        type: "group",
+        heading: this.t("preferences"),
+        cls: "tag-to-page-settings__declarative-section",
+        items: [
+          {
+            name: this.t("language"),
+            desc: this.t("languageDesc"),
+            render: (setting) => {
+              setting.settingEl.addClass("tag-to-page-settings__setting");
+              setting.addDropdown(
+                (dropdown) => dropdown.addOption("zh", "\u4E2D\u6587").addOption("en", "English").setValue(this.plugin.settings.language).onChange((value) => this.setLanguage(value))
+              );
+            }
+          }
+        ]
+      },
+      {
+        type: "group",
+        heading: this.t("behavior"),
+        cls: "tag-to-page-settings__declarative-section",
+        items: [
+          {
+            name: this.t("autocompleteName"),
+            desc: this.t("autocompleteDesc"),
+            render: (setting) => {
+              setting.settingEl.addClass("tag-to-page-settings__setting");
+              setting.addToggle(
+                (toggle) => toggle.setValue(this.plugin.settings.autocompleteOn).onChange((value) => this.setAutocompleteEnabled(value))
+              );
+            }
+          },
+          {
+            name: this.t("autocompleteNotice"),
+            desc: this.t("autocompleteNoticeDesc"),
+            render: (setting) => {
+              setting.settingEl.addClass("tag-to-page-settings__notice");
+            }
+          }
+        ]
+      }
+    ];
+  }
   display() {
     const { containerEl } = this;
     containerEl.empty();
@@ -262,8 +352,8 @@ var TagToPageSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     icon.setAttr("aria-hidden", "true");
     const heroBody = hero.createDiv({ cls: "tag-to-page-settings__hero-body" });
-    heroBody.createEl("h2", { text: this.t("settingHeader") });
-    heroBody.createEl("p", { text: this.t("pluginDesc") });
+    const heroHeading = new import_obsidian.Setting(heroBody).setName(this.t("settingHeader")).setDesc(this.t("pluginDesc")).setHeading();
+    heroHeading.settingEl.addClass("tag-to-page-settings__hero-heading");
     const heroMeta = heroBody.createDiv({ cls: "tag-to-page-settings__hero-meta" });
     heroMeta.createSpan({
       cls: "tag-to-page-settings__version",
@@ -278,36 +368,19 @@ var TagToPageSettingTab = class extends import_obsidian.PluginSettingTab {
     const preferencesSection = containerEl.createDiv({
       cls: "tag-to-page-settings__section"
     });
-    const preferencesHeader = preferencesSection.createDiv({
-      cls: "tag-to-page-settings__section-header"
-    });
-    preferencesHeader.createEl("h3", { text: this.t("preferences") });
-    preferencesHeader.createEl("p", { text: this.t("preferencesDesc") });
+    const preferencesHeader = new import_obsidian.Setting(preferencesSection).setName(this.t("preferences")).setDesc(this.t("preferencesDesc")).setHeading();
+    preferencesHeader.settingEl.addClass("tag-to-page-settings__section-header");
     const languageSetting = new import_obsidian.Setting(preferencesSection).setName(this.t("language")).setDesc(this.t("languageDesc")).addDropdown(
-      (dropdown) => dropdown.addOption("zh", "\u4E2D\u6587").addOption("en", "English").setValue(this.plugin.settings.language).onChange(async (value) => {
-        this.plugin.settings.language = value;
-        await this.plugin.saveSettings();
-        this.display();
-      })
+      (dropdown) => dropdown.addOption("zh", "\u4E2D\u6587").addOption("en", "English").setValue(this.plugin.settings.language).onChange((value) => this.setLanguage(value))
     );
     languageSetting.settingEl.addClass("tag-to-page-settings__setting");
     const behaviorSection = containerEl.createDiv({
       cls: "tag-to-page-settings__section"
     });
-    const behaviorHeader = behaviorSection.createDiv({
-      cls: "tag-to-page-settings__section-header"
-    });
-    behaviorHeader.createEl("h3", { text: this.t("behavior") });
-    behaviorHeader.createEl("p", { text: this.t("behaviorDesc") });
+    const behaviorHeader = new import_obsidian.Setting(behaviorSection).setName(this.t("behavior")).setDesc(this.t("behaviorDesc")).setHeading();
+    behaviorHeader.settingEl.addClass("tag-to-page-settings__section-header");
     const autocompleteSetting = new import_obsidian.Setting(behaviorSection).setName(this.t("autocompleteName")).setDesc(this.t("autocompleteDesc")).addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autocompleteOn).onChange(async (value) => {
-        this.plugin.settings.autocompleteOn = value;
-        await this.plugin.saveSettings();
-        const id = this.plugin.manifest.id;
-        const pluginManager = this.plugin.app.plugins;
-        await pluginManager.disablePlugin(id);
-        await pluginManager.enablePlugin(id);
-      })
+      (toggle) => toggle.setValue(this.plugin.settings.autocompleteOn).onChange((value) => this.setAutocompleteEnabled(value))
     );
     autocompleteSetting.settingEl.addClass("tag-to-page-settings__setting");
     const notice = behaviorSection.createDiv({
